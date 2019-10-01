@@ -41,5 +41,5 @@ the format:
 
 # Training
 
-To use TensorFlow against your newly created imagenet dataset in S3, you'll want
-to follow the [s3 deployment](https://github.com/tensorflow/examples/blob/master/community/en/docs/deploy/s3.md) examples from the TensorFlow docs.
+To use TensorFlow to train against your newly created imagenet dataset in S3, you'll
+want to follow the [s3 deployment](https://github.com/tensorflow/examples/blob/master/community/en/docs/deploy/s3.md) examples from the TensorFlow docs.

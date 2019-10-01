@@ -1,13 +1,11 @@
 # ImageNet to S3
 
-Script to download the Imagenet dataset and upload to s3. Derrived from
-
-[imagenet_to_gcs.py](https://github.com/tensorflow/tpu/blob/master/tools/datasets/imagenet_to_gcs.py)
+Script to download the Imagenet dataset and upload to s3. Derrived from [imagenet_to_gcs.py](https://github.com/tensorflow/tpu/blob/master/tools/datasets/imagenet_to_gcs.py).
 
 To run the script setup a virtualenv with the following libraries installed.
 - `boto3`: Install with `pip install boto3`
 - `tensorflow`: Install with `pip install tensorflow`
--  awscli: Install with pip install awscli
+-  `awscli`: Install with `pip install awscli`
 
 ```
 pip install -y boto3 awscli tensorflow

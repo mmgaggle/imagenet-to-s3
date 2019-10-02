@@ -85,8 +85,8 @@ VALIDATION_DIRECTORY = 'validation'
 
 def _check_or_create_dir(directory):
   """Check if directory exists otherwise create it."""
-  if not tf.gfile.Exists(directory):
-    tf.gfile.MakeDirs(directory)
+  if not tf.io.gfile.exists(directory):
+    tf.io.gfile.makedirs(directory)
 
 
 def download_dataset(raw_data_dir):
@@ -116,7 +116,7 @@ def download_dataset(raw_data_dir):
   _check_or_create_dir(raw_data_dir)
 
   # Download the training data
-  tf.logging.info('Downloading the training set. This may take a few hours.')
+  tf.compat.v1.logging.info('Downloading the training set. This may take a few hours.')
   directory = os.path.join(raw_data_dir, TRAINING_DIRECTORY)
   filename = os.path.join(raw_data_dir, TRAINING_FILE)
   _download(BASE_URL + TRAINING_FILE, filename)
@@ -132,11 +132,11 @@ def download_dataset(raw_data_dir):
     os.remove(sub_tarfile)
 
   # Download synset_labels for validation set
-  tf.logging.info('Downloading the validation labels.')
+  tf.compat.v1.logging.info('Downloading the validation labels.')
   _download(LABELS_URL, os.path.join(raw_data_dir, LABELS_FILE))
 
   # Download the validation data
-  tf.logging.info('Downloading the validation set. This may take a few hours.')
+  tf.compat.v1.logging.info('Downloading the validation set. This may take a few hours.')
   directory = os.path.join(raw_data_dir, VALIDATION_DIRECTORY)
   filename = os.path.join(raw_data_dir, VALIDATION_FILE)
   _download(BASE_URL + VALIDATION_FILE, filename)
@@ -152,6 +152,7 @@ def _int64_feature(value):
 
 def _bytes_feature(value):
   """Wrapper for inserting bytes features into Example proto."""
+  value = tf.compat.as_bytes(value)
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
@@ -168,9 +169,9 @@ def _convert_to_example(filename, image_buffer, label, synset, height, width):
   Returns:
     Example proto
   """
-  colorspace = 'RGB'
+  colorspace = b'RGB'
   channels = 3
-  image_format = 'JPEG'
+  image_format = b'JPEG'
 
   example = tf.train.Example(features=tf.train.Features(feature={
       'image/height': _int64_feature(height),
@@ -229,20 +230,21 @@ class ImageCoder(object):
 
   def __init__(self):
     # Create a single Session to run all image coding calls.
-    self._sess = tf.Session()
+    self._sess = tf.compat.v1.Session()
+    tf.compat.v1.disable_eager_execution()
 
     # Initializes function that converts PNG to JPEG data.
-    self._png_data = tf.placeholder(dtype=tf.string)
+    self._png_data = tf.compat.v1.placeholder(dtype=tf.string)
     image = tf.image.decode_png(self._png_data, channels=3)
     self._png_to_jpeg = tf.image.encode_jpeg(image, format='rgb', quality=100)
 
     # Initializes function that converts CMYK JPEG data to RGB JPEG data.
-    self._cmyk_data = tf.placeholder(dtype=tf.string)
+    self._cmyk_data = tf.compat.v1.placeholder(dtype=tf.string)
     image = tf.image.decode_jpeg(self._cmyk_data, channels=0)
     self._cmyk_to_rgb = tf.image.encode_jpeg(image, format='rgb', quality=100)
 
     # Initializes function that decodes RGB JPEG data.
-    self._decode_jpeg_data = tf.placeholder(dtype=tf.string)
+    self._decode_jpeg_data = tf.compat.v1.placeholder(dtype=tf.string)
     self._decode_jpeg = tf.image.decode_jpeg(self._decode_jpeg_data, channels=3)
 
   def png_to_jpeg(self, image_data):
@@ -273,17 +275,17 @@ def _process_image(filename, coder):
     width: integer, image width in pixels.
   """
   # Read the image file.
-  with tf.gfile.FastGFile(filename, 'r') as f:
+  with tf.io.gfile.GFile(filename, 'rb') as f:
     image_data = f.read()
 
   # Clean the dirty data.
   if _is_png(filename):
     # 1 image is a PNG.
-    tf.logging.info('Converting PNG to JPEG for %s' % filename)
+    tf.compat.v1.logging.info('Converting PNG to JPEG for %s' % filename)
     image_data = coder.png_to_jpeg(image_data)
   elif _is_cmyk(filename):
     # 22 JPEG images are in CMYK colorspace.
-    tf.logging.info('Converting CMYK to RGB for %s' % filename)
+    tf.compat.v1.logging.info('Converting CMYK to RGB for %s' % filename)
     image_data = coder.cmyk_to_rgb(image_data)
 
   # Decode the RGB JPEG.
@@ -308,7 +310,7 @@ def _process_image_files_batch(coder, output_file, filenames, synsets, labels):
     synsets: list of strings; each string is a unique WordNet ID
     labels: map of string to integer; id for all synset labels
   """
-  writer = tf.python_io.TFRecordWriter(output_file)
+  writer = tf.io.TFRecordWriter(output_file)
 
   for filename, synset in zip(filenames, synsets):
     image_buffer, height, width = _process_image(filename, coder)
@@ -348,7 +350,7 @@ def _process_dataset(filenames, synsets, labels, output_directory, prefix,
         output_directory, '%s-%.5d-of-%.5d' % (prefix, shard, num_shards))
     _process_image_files_batch(coder, output_file, chunk_files,
                                chunk_synsets, labels)
-    tf.logging.info('Finished writing file: %s' % output_file)
+    tf.compat.v1.logging.info('Finished writing file: %s' % output_file)
     files.append(output_file)
   return files
 
@@ -360,28 +362,29 @@ def convert_to_tf_records(raw_data_dir):
   # across the batches.
   random.seed(0)
   def make_shuffle_idx(n):
-    order = range(n)
+    order = list(range(n))
     random.shuffle(order)
     return order
 
   # Glob all the training files
-  training_files = tf.gfile.Glob(
+  training_files = tf.io.gfile.glob(
       os.path.join(raw_data_dir, TRAINING_DIRECTORY, '*', '*.JPEG'))
 
   # Get training file synset labels from the directory name
   training_synsets = [
       os.path.basename(os.path.dirname(f)) for f in training_files]
 
+
   training_shuffle_idx = make_shuffle_idx(len(training_files))
   training_files = [training_files[i] for i in training_shuffle_idx]
   training_synsets = [training_synsets[i] for i in training_shuffle_idx]
 
   # Glob all the validation files
-  validation_files = sorted(tf.gfile.Glob(
+  validation_files = sorted(tf.io.gfile.glob(
       os.path.join(raw_data_dir, VALIDATION_DIRECTORY, '*.JPEG')))
 
   # Get validation file synset labels from labels.txt
-  validation_synsets = tf.gfile.FastGFile(
+  validation_synsets = tf.io.gfile.GFile(
       os.path.join(raw_data_dir, LABELS_FILE), 'r').read().splitlines()
 
   # Create unique ids for all synsets
@@ -389,14 +392,14 @@ def convert_to_tf_records(raw_data_dir):
       sorted(set(validation_synsets + training_synsets)))}
 
   # Create training data
-  tf.logging.info('Processing the training data.')
+  tf.compat.v1.logging.info('Processing the training data.')
   training_records = _process_dataset(
       training_files, training_synsets, labels,
       os.path.join(FLAGS.local_scratch_dir, TRAINING_DIRECTORY),
       TRAINING_DIRECTORY, TRAINING_SHARDS)
 
   # Create validation data
-  tf.logging.info('Processing the validation data.')
+  tf.compat.v1.logging.info('Processing the validation data.')
   validation_records = _process_dataset(
       validation_files, validation_synsets, labels,
       os.path.join(FLAGS.local_scratch_dir, VALIDATION_DIRECTORY),
@@ -406,9 +409,9 @@ def convert_to_tf_records(raw_data_dir):
 
 
 def upload_to_s3(training_records, validation_records):
-  """Upload TF-Record files to GCS, at provided path."""
+  """Upload TF-Record files to S3, at provided path."""
 
-  # Find the GCS bucket_name and key_prefix for dataset files
+  # Find the S3 bucket_name and key_prefix for dataset files
   path_parts = FLAGS.s3_output_path[5:].split('/', 1)
   bucket_name = path_parts[0]
   if len(path_parts) == 1:
@@ -419,26 +422,22 @@ def upload_to_s3(training_records, validation_records):
     key_prefix = path_parts[1] + '/'
 
 
-  # client = storage.Client(project=FLAGS.project) #GCS
   s3 = boto3.resource('s3')
-  # bucket = client.get_bucket(bucket_name) #GCS
   s3.create_bucket(Bucket=bucket_name)
 
   def _upload_files(filenames):
     """Upload a list of files into a specifc subdirectory."""
     for i, filename in enumerate(sorted(filenames)):
-      # blob = bucket.blob(key_prefix + os.path.basename(filename))
-      # blob.upload_from_filename(filename)
       s3.Bucket(bucket_name).upload_file(filename,key_prefix + os.path.basename(filename))
       if not i % 20:
-        tf.logging.info('Finished uploading file: %s' % filename)
+        tf.compat.v1.logging.info('Finished uploading file: %s' % filename)
 
   # Upload training dataset
-  tf.logging.info('Uploading the training data.')
+  tf.compat.v1.logging.info('Uploading the training data.')
   _upload_files(training_records)
 
   # Upload validation dataset
-  tf.logging.info('Uploading the validation data.')
+  tf.compat.v1.logging.info('Uploading the validation data.')
   _upload_files(validation_records)
 
 
@@ -457,13 +456,13 @@ def main(argv):  # pylint: disable=unused-argument
   raw_data_dir = FLAGS.raw_data_dir
   if raw_data_dir is None:
     raw_data_dir = os.path.join(FLAGS.local_scratch_dir, 'raw_data')
-    tf.logging.info('Downloading data to raw_data_dir: %s' % raw_data_dir)
+    tf.compat.v1.logging.info('Downloading data to raw_data_dir: %s' % raw_data_dir)
     download_dataset(raw_data_dir)
 
   # Convert the raw data into tf-records
   training_records, validation_records = convert_to_tf_records(raw_data_dir)
 
-  # Upload to GCS
+  # Upload to S3 
   if FLAGS.s3_upload:
     upload_to_s3(training_records, validation_records)
 

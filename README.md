@@ -8,7 +8,13 @@ To run the script setup a virtualenv with the following libraries installed.
 -  `awscli`: Install with `pip install awscli`
 
 ```
-pip install -y boto3 awscli tensorflow
+sudo yum install python3-pip.noarch
+sudo pip3 install -U virtualenv
+virtualenv --system-site-packages -p python3 ./venv
+source ./venv/bin/activate bash
+pip install --upgrade pip
+pip list
+pip install --upgrade tensorflow boto3 awscli
 ```
 
 Then configure your AWS credentials

@@ -31,7 +31,7 @@ Make sure you have around 300GB of disc space available on the machine where
 you're running this script. You can run the script using the following command.
 
 ```
-python imagenet_to_s3.py \
+python img2tfr-s3.py \
   --s3_output_path="s3://TEST_BUCKET/IMAGENET_DIR" \
   --local_scratch_dir="./imagenet" \
   --imagenet_username=FILL_ME_IN \
